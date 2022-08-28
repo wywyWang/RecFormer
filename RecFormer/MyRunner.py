@@ -29,7 +29,7 @@ class RecRunner(RecModel):
         self.mappings = None
         
         # model setting
-        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.device = torch.device("cuda:{}".format(config['gpu_index'])) if torch.cuda.is_available() else torch.device("cpu")
         self.recformer = TransformerEncoder(config).to(self.device)
         self.optimizer = torch.optim.Adam(self.recformer.parameters(), lr=config['learning_rate'])
         self.criterion = nn.CrossEntropyLoss()
@@ -60,7 +60,7 @@ class RecRunner(RecModel):
         for epoch in pbar:
             self.recformer.train()
             total_loss = 0
-            for data in tqdm(dataloader, total=len(dataloader)):
+            for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
                 sequences, labels = data[0].to(self.device), data[1].to(self.device)
 
@@ -75,9 +75,10 @@ class RecRunner(RecModel):
                 ce_loss.backward()
                 self.optimizer.step()
 
-                print(ce_loss)
+                if batch_index % 100 == 0:
+                    print(ce_loss.item())
             
-            total_loss = total_loss / len(dataloader) / self.config['batch']
+            total_loss /= len(dataloader)
             train_loss.append(total_loss)
         return train_loss
 
@@ -89,6 +90,7 @@ class RecRunner(RecModel):
         train_loss = self._trainer(train_dataloader)
 
         print(train_loss)
+        1/0
 
         # user_tracks = pd.DataFrame(p)
         

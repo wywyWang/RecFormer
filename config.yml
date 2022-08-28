@@ -1,0 +1,15 @@
+model_args:
+    n_layers: 1
+    n_heads: 2
+    track_dim: 128
+    encode_dim: 128
+    dropout: 0.1
+    track_num: 820999
+    seed: 42
+    batch: 8
+    learning_rate: 0.0001
+    epochs: 1
+    mlm_prob: 0.8
+    max_len: 100
+    is_save: 0
+    gpu_index: 1
