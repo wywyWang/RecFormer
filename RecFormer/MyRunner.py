@@ -120,12 +120,17 @@ class RecRunner(RecModel):
         users, predictions = [], []
         for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
             self.optimizer.zero_grad()
-            user_id, sequences = data[0], data[1].to(self.device)
+            user_id, sequences = data[0].tolist(), data[1].to(self.device)
 
             logits = self.recformer(sequences)
 
             # the last token is the predicted one
             logits = logits[:, -1]
+
+            # remove past tracks as -1e3
+            # decrease performance
+            past_tracks = self.df.loc[self.df['user_id']==user_id[0], 'converted_track_id'].values.tolist()
+            logits[:, past_tracks] = -1e3
 
             topk_suggestions = torch.topk(input=logits, k=self.top_k, largest=True)[1].cpu().detach().flatten().tolist()
 
@@ -135,7 +140,7 @@ class RecRunner(RecModel):
             for suggestion in topk_suggestions:
                 invert_top_suggestions.append(self.invert_track_list[suggestion])
 
-            users.append(user_id.tolist())
+            users.append(user_id)
             predictions.append(invert_top_suggestions)
         
         return users, predictions
