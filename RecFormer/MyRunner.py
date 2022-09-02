@@ -24,10 +24,6 @@ class RecRunner(RecModel):
         # # data preprocessing (62943 artists)
         # [TODO]: not verify yet
         # self.tracks_info = self._process_tracks_info(tracks_info)
-        # # convert track to continuous index (0 is for PAD)
-        # track_list = tracks_info.index.to_list()
-        # self.track_list = {value: index+1 for index, value in enumerate(track_list)}
-        # self.invert_track_list = {index+1: value for index, value in enumerate(track_list)}
 
         # model setting
         self.device = torch.device("cuda:{}".format(config['gpu_index'])) if torch.cuda.is_available() else torch.device("cpu")
@@ -46,6 +42,7 @@ class RecRunner(RecModel):
         return tracks_info_dt.to_pandas()
 
     def _convert_track_id(self, df: pd.DataFrame):
+        # convert track to continuous index (0 is for PAD)
         track_list = df['track_id'].unique().tolist()
         self.track_list = {value: index+1 for index, value in enumerate(track_list)}
         self.invert_track_list = {index+1: value for index, value in enumerate(track_list)}
