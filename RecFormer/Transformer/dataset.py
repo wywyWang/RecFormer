@@ -67,11 +67,6 @@ class RecDataset(Dataset):
             mask_len = self.max_len - len(tokens)
             tokens = [0] * mask_len + tokens
 
-            # # remove the last one for MASK if exactly match max_len
-            # if self.max_len - len(tokens) == 0:
-            #     tokens = tokens[:-1]
-
-            # tokens = tokens + [self.mask_token]
             return user_id, torch.LongTensor(tokens)
         else:
             raise NotImplementedError
