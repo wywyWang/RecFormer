@@ -56,18 +56,22 @@ class RecDataset(Dataset):
 
             mask_len = self.max_len - len(tokens)
 
-            tokens = tokens + [0] * mask_len
-            labels = labels + [0] * mask_len
+            tokens = [0] * mask_len + tokens
+            labels = [0] * mask_len + labels
 
             return torch.LongTensor(tokens), torch.LongTensor(labels)
         elif self.mode == 'test':
+            user_histroy += [self.mask_token]
             tokens = user_histroy[-self.max_len:]
 
-            # remove the last one for MASK if exactly match max_len
-            if self.max_len - len(tokens) == 0:
-                tokens = tokens[:-1]
+            mask_len = self.max_len - len(tokens)
+            tokens = [0] * mask_len + tokens
 
-            tokens = tokens + [self.mask_token]
+            # # remove the last one for MASK if exactly match max_len
+            # if self.max_len - len(tokens) == 0:
+            #     tokens = tokens[:-1]
+
+            # tokens = tokens + [self.mask_token]
             return user_id, torch.LongTensor(tokens)
         else:
             raise NotImplementedError
