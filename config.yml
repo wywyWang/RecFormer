@@ -1,17 +1,19 @@
 model_args:
     n_layers: 2
     n_heads: 2
-    track_dim: 256
-    encode_dim: 256
+    track_dim: 128
+    encode_dim: 128
     dropout: 0.1
     track_num: 820999
+    artist_num: 62944
     seed: 42
-    batch: 16
-    learning_rate: 0.001
-    epochs: 5
+    batch: 64
+    learning_rate: 0.0001
+    epochs: 10
     mlm_prob: 0.2
     max_len: 50
     is_save: 0
     is_debug: 0
-    gpu_index: 1
+    gpu_index: 0
+
     save_path: model/

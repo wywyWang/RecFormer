@@ -10,7 +10,7 @@ class RecDataset(Dataset):
         self.mode = mode
         self.mlm_prob = config['mlm_prob']
         self.max_len = config['max_len']
-        self.mask_token = config['track_num']   # set track_num = MASK, 0 is PAD
+        self.mask_token = config['track_num'] + 1   # set track_num + 1 = MASK, 0 is PAD
 
         df = df[['user_id', 'track_id', 'converted_track_id', 'timestamp']].sort_values('timestamp')
         p = df.groupby('user_id', sort=False)['converted_track_id'].agg(list)

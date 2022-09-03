@@ -70,8 +70,8 @@ class RecRunner(RecModel):
     def _trainer(self, dataloader):
         pbar = tqdm(range(self.config['epochs']), desc='Epoch: ')
         train_loss = []
+        self.recformer.train()
         for epoch in pbar:
-            self.recformer.train()
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
@@ -86,11 +86,15 @@ class RecRunner(RecModel):
                 logits = logits[labels!=0]
                 labels = labels[labels!=0]
 
+                # print(torch.topk(input=logits[0], k=3, largest=True)[1])
+                # print(labels[0])
+
                 ce_loss = self.criterion(logits, labels)
-                total_loss += ce_loss.item()
+                loss = ce_loss.item()
+                total_loss += loss
                 ce_loss.backward()
                 self.optimizer.step()
-                pbar.set_description("Loss: {}".format(round(ce_loss.item(), 3)), refresh=True)
+                pbar.set_description("Loss: {}".format(round(loss, 3)), refresh=True)
 
                 # if batch_index % 100 == 0:
                 #     print()
@@ -109,13 +113,13 @@ class RecRunner(RecModel):
         train_dataloader = self._prepare_train_data(train_df)
 
         self.recformer = TransformerEncoder(self.config).to(self.device)
-        self.optimizer = torch.optim.Adam(self.recformer.parameters(), lr=self.config['learning_rate'])
-        self.criterion = nn.CrossEntropyLoss()
+        self.optimizer = torch.optim.Adam(self.recformer.parameters(), lr=self.config['learning_rate'], weight_decay=1e-2)
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.3)
 
         print("==== Start Training ====")
         train_loss = self._trainer(train_dataloader)
 
-        print(train_loss[-1])
+        print(train_loss)
 
         if self.config['is_save']:
             if not os.path.exists(config['save_path']):

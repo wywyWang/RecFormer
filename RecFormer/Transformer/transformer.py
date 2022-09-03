@@ -53,12 +53,13 @@ class TransformerEncoder(nn.Module):
         d_k = config['encode_dim']
         d_v = config['encode_dim']
         d_model = config['encode_dim']
-        d_inner = config['encode_dim'] * 2
+        d_inner = config['encode_dim'] * 4
         dropout = config['dropout']
         self.scale_emb = False
         self.d_model = d_model
 
-        self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'])
+        # + 2 for mask and pad
+        self.track_embedding = nn.Embedding(config['track_num']+2, config['encode_dim'])
         self.position_embedding = PositionalEncoding(config['track_dim'], n_position=config['max_len'])
         self.dropout = nn.Dropout(p=dropout)
 
@@ -67,7 +68,15 @@ class TransformerEncoder(nn.Module):
             for _ in range(self.n_layers)])
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
 
-        self.classifier = nn.Linear(config['encode_dim'], config['track_num']+1)
+        self.classifier = nn.Linear(config['encode_dim'], config['track_num']+2)
+
+        # two layer achieved better hit-rate but worse in overall score
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(config['encode_dim'], config['encode_dim']*2),
+        #     nn.GELU(),
+        #     nn.Linear(config['encode_dim']*2, config['track_num']+2)
+        # )
+        
 
     def forward(self, input, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
