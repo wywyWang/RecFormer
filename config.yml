@@ -1,11 +1,8 @@
 model_args:
     n_layers: 2
     n_heads: 2
-    track_dim: 128
     encode_dim: 128
     dropout: 0.1
-    track_num: 820999
-    artist_num: 62944
     seed: 42
     batch: 64
     learning_rate: 0.0001

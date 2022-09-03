@@ -60,7 +60,11 @@ class TransformerEncoder(nn.Module):
 
         # + 2 for mask and pad
         self.track_embedding = nn.Embedding(config['track_num']+2, config['encode_dim'])
-        self.position_embedding = PositionalEncoding(config['track_dim'], n_position=config['max_len'])
+        self.artist_embedding = nn.Embedding(config['artist_num']+2, config['encode_dim'])
+        self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
+        self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
+        self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
+
         self.dropout = nn.Dropout(p=dropout)
 
         self.layer_stack = nn.ModuleList([
@@ -78,15 +82,20 @@ class TransformerEncoder(nn.Module):
         # )
         
 
-    def forward(self, input, src_mask=None, return_attns=False):
+    def forward(self, sequences, artists, genders, countrys, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
 
-        embedded_tracks = self.track_embedding(input)
+        embedded_tracks = self.track_embedding(sequences)
+        # embedded_artists = self.artist_embedding(artists)
+        embedded_genders = self.gender_embedding(genders)
+        embedded_countrys = self.country_embedding(countrys)
+
+        embeddings = embedded_tracks + embedded_genders + embedded_countrys
 
         # Forward
         if self.scale_emb:
-            embedded_tracks *= self.d_model ** 0.5
-        encode_output = self.dropout(self.position_embedding(embedded_tracks))
+            embeddings *= self.d_model ** 0.5
+        encode_output = self.dropout(self.position_embedding(embeddings))
         encode_output = self.layer_norm(encode_output)
 
         for enc_layer in self.layer_stack:

@@ -13,40 +13,48 @@ import datatable as dt
 
 class RecRunner(RecModel):
     
-    def __init__(self, tracks_info, config, top_k: int=100):
+    def __init__(self, tracks_info, user_info, config, top_k: int=100):
         super(RecRunner, self).__init__()
         """
         :param top_k: numbers of recommendation to return for each user. Defaults to 20.
         """
+
         self.top_k = top_k
         self.config = config
 
-        # # data preprocessing (62943 artists)
-        # [TODO]: not verify yet
-        # self.tracks_info = self._process_tracks_info(tracks_info)
+        self.user_info = self._convert_user_info(user_info)
 
         # model setting
         self.device = torch.device("cuda:{}".format(config['gpu_index'])) if torch.cuda.is_available() else torch.device("cpu")
+        # self.device = torch.device("cpu")
 
-    def _process_tracks_info(self, tracks_info):
-        artist_id = tracks_info['artist_id'].values.tolist()
-        self.artist_list = {value: index+1 for index, value in enumerate(artist_id)}
-        tracks_info_dt = dt.Frame(tracks_info)
+    def _convert_user_info(self, user_info):
+        user_info['gender'] = user_info['gender'].fillna(value='n')
+        user_info['country'] = user_info['country'].fillna(value='UNKNOWN')
 
-        converted_artist_list = []
-        for index in tqdm(range(tracks_info_dt[:, 'artist_id'].shape[0])):
-            artist = tracks_info_dt[index, 'artist_id']
-            converted_artist_list.append(self.artist_list[artist])
-        tracks_info_dt.cbind(dt.Frame(converted_artist_id=converted_artist_list))
+        codes_genders, uniques_genders = pd.factorize(user_info['gender'])
+        user_info['converted_gender'] = codes_genders + 1              # reserve 0 for pad
 
-        return tracks_info_dt.to_pandas()
+        codes_country, uniques_country = pd.factorize(user_info['country'])
+        user_info['converted_country'] = codes_country + 1              # reserve 0 for pad
 
-    def _convert_track_id(self, df: pd.DataFrame):
+        self.config['gender_num'] = len(uniques_genders) + 1
+        self.config['country_num'] = len(uniques_country) + 1
+
+        return user_info
+
+    def _convert_track_info(self, df: pd.DataFrame):
         # convert track to continuous index (0 is for PAD)
         track_list = df['track_id'].unique().tolist()
         self.track_list = {value: index+1 for index, value in enumerate(track_list)}
         self.invert_track_list = {index+1: value for index, value in enumerate(track_list)}
         self.config['track_num'] = len(track_list)
+
+        # convert artist to continuous index (0 is for PAD)
+        artist_list = df['artist_id'].unique().tolist()
+        self.artist_list = {value: index+1 for index, value in enumerate(artist_list)}
+        self.invert_artist_list = {index+1: value for index, value in enumerate(artist_list)}
+        self.config['artist_num'] = len(artist_list)
 
         df_dt = dt.Frame(df)
         converted_track_list = []
@@ -55,15 +63,21 @@ class RecRunner(RecModel):
             converted_track_list.append(self.track_list[track])
         df_dt.cbind(dt.Frame(converted_track_id=converted_track_list))
 
+        converted_artist_list = []
+        for index in tqdm(range(df_dt[:, 'artist_id'].shape[0])):
+            artist = df_dt[index, 'artist_id']
+            converted_artist_list.append(self.artist_list[artist])
+        df_dt.cbind(dt.Frame(converted_artist_id=converted_artist_list))
+
         return df_dt.to_pandas()
 
     def _prepare_train_data(self, df):
         # convert track id to feed into embedding layer
         # total: 820998 unique tracks
-        self.df = self._convert_track_id(df)
+        self.df = self._convert_track_info(df)
 
         # build dataloader
-        data = RecDataset(df=self.df, mode='train', config=self.config)
+        data = RecDataset(df=self.df, user_info=self.user_info, mode='train', config=self.config)
         dataloader = DataLoader(data, batch_size=self.config['batch'])
         return dataloader
 
@@ -75,12 +89,9 @@ class RecRunner(RecModel):
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                sequences, labels = data[0].to(self.device), data[1].to(self.device)
+                sequences, artists, genders, countrys, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
 
-                # [TODO]: get artist embedding
-                # artist_embedding = self.artist_encoder(artist_item)
-
-                logits = self.recformer(sequences)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys)
 
                 # remove pad and unmasked labels and tokens
                 logits = logits[labels!=0]
@@ -127,7 +138,7 @@ class RecRunner(RecModel):
             torch.save(self.recformer.state_dict(), '{}{}.pt'.format(config['save_path'], 'model'))
 
     def _prepare_test_data(self, test_df):
-        data = RecDataset(df=self.df, mode='test', config=self.config, test_df=test_df)
+        data = RecDataset(df=self.df, user_info=self.user_info, mode='test', config=self.config, test_df=test_df)
         # [TODO]: can batchify now, but has error in below codes
         dataloader = DataLoader(data, batch_size=1)
         return dataloader
@@ -138,9 +149,9 @@ class RecRunner(RecModel):
             users, predictions = [], []
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                user_id, sequences = data[0].tolist(), data[1].to(self.device)
+                user_id, sequences, artists, genders, countrys = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
 
-                logits = self.recformer(sequences)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys)
 
                 # the last token is the predicted one
                 logits = logits[:, -1]
@@ -171,6 +182,6 @@ class RecRunner(RecModel):
         predictions = np.concatenate([np.array(users), np.array(predictions)], axis=1)
         predictions = pd.DataFrame(predictions, columns=['user_id', *[str(i) for i in range(self.top_k)]]).set_index('user_id')
 
-        print(predictions.sample(3))
+        print(predictions.head(3))
 
         return predictions
