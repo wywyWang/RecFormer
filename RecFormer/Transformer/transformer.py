@@ -58,12 +58,17 @@ class TransformerEncoder(nn.Module):
         self.scale_emb = False
         self.d_model = d_model
 
-        # + 2 for mask and pad
-        self.track_embedding = nn.Embedding(config['track_num']+2, config['encode_dim'])
-        self.artist_embedding = nn.Embedding(config['artist_num']+2, config['encode_dim'])
+        # + 1 for mask
+        self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'])
+        # self.artist_embedding = nn.Embedding(config['artist_num']+1, config['encode_dim'])
         self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
         self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
-        self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
+        # self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
+
+        self.avg_month_embedding = nn.Sequential(
+            nn.Linear(1, config['encode_dim']),
+            nn.ReLU()
+        )
 
         self.dropout = nn.Dropout(p=dropout)
 
@@ -72,7 +77,7 @@ class TransformerEncoder(nn.Module):
             for _ in range(self.n_layers)])
         self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
 
-        self.classifier = nn.Linear(config['encode_dim'], config['track_num']+2)
+        self.classifier = nn.Linear(config['encode_dim'], config['track_num'])
 
         # two layer achieved better hit-rate but worse in overall score
         # self.classifier = nn.Sequential(
@@ -82,7 +87,7 @@ class TransformerEncoder(nn.Module):
         # )
         
 
-    def forward(self, sequences, artists, genders, countrys, src_mask=None, return_attns=False):
+    def forward(self, sequences, artists, genders, countrys, artist_avg_months, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
 
         embedded_tracks = self.track_embedding(sequences)
@@ -90,11 +95,15 @@ class TransformerEncoder(nn.Module):
         embedded_genders = self.gender_embedding(genders)
         embedded_countrys = self.country_embedding(countrys)
 
+        # add this will become nan loss
+        embedded_artist_avg_months = self.avg_month_embedding(artist_avg_months.unsqueeze(-1))
+
         embeddings = embedded_tracks + embedded_genders + embedded_countrys
 
         # Forward
         if self.scale_emb:
             embeddings *= self.d_model ** 0.5
+
         encode_output = self.dropout(self.position_embedding(embeddings))
         encode_output = self.layer_norm(encode_output)
 

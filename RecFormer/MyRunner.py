@@ -45,31 +45,18 @@ class RecRunner(RecModel):
 
     def _convert_track_info(self, df: pd.DataFrame):
         # convert track to continuous index (0 is for PAD)
-        track_list = df['track_id'].unique().tolist()
-        self.track_list = {value: index+1 for index, value in enumerate(track_list)}
-        self.invert_track_list = {index+1: value for index, value in enumerate(track_list)}
-        self.config['track_num'] = len(track_list)
+        self.track_list, self.invert_track_list = pd.factorize(df['track_id'])
+        df['converted_track_id'] = self.track_list + 1              # reserve 0 for pad
+        self.config['track_num'] = len(self.invert_track_list) + 1
+        print(df['converted_track_id'].max())
+        print("Track num: {}".format(self.config['track_num']))
 
-        # convert artist to continuous index (0 is for PAD)
-        artist_list = df['artist_id'].unique().tolist()
-        self.artist_list = {value: index+1 for index, value in enumerate(artist_list)}
-        self.invert_artist_list = {index+1: value for index, value in enumerate(artist_list)}
-        self.config['artist_num'] = len(artist_list)
+        self.artist_list, uniques_artist_list = pd.factorize(df['artist_id'])
+        df['converted_artist_id'] = self.artist_list + 1              # reserve 0 for pad
+        self.config['artist_num'] = len(uniques_artist_list) + 1
+        print("Artist num: {}".format(self.config['artist_num']))
 
-        df_dt = dt.Frame(df)
-        converted_track_list = []
-        for index in tqdm(range(df_dt[:, 'track_id'].shape[0])):
-            track = df_dt[index, 'track_id']
-            converted_track_list.append(self.track_list[track])
-        df_dt.cbind(dt.Frame(converted_track_id=converted_track_list))
-
-        converted_artist_list = []
-        for index in tqdm(range(df_dt[:, 'artist_id'].shape[0])):
-            artist = df_dt[index, 'artist_id']
-            converted_artist_list.append(self.artist_list[artist])
-        df_dt.cbind(dt.Frame(converted_artist_id=converted_artist_list))
-
-        return df_dt.to_pandas()
+        return df
 
     def _prepare_train_data(self, df):
         # convert track id to feed into embedding layer
@@ -81,6 +68,20 @@ class RecRunner(RecModel):
         dataloader = DataLoader(data, batch_size=self.config['batch'])
         return dataloader
 
+    def _negative_sampling(self, logits, labels):
+        sampling_logits = None
+        class_num = logits.shape[1]
+        candidates = torch.randint(low=0, high=logits.shape[1], size=(class_num-self.config['negative_samples'],))
+        
+        for mini_batch in range(len(labels)):
+            label_logits = logits[mini_batch, labels[mini_batch]]
+            logits[mini_batch, candidates] = -1e6
+            logits[mini_batch, labels[mini_batch]] = label_logits
+
+        # user x class_num, user
+        # print(logits.shape, labels.shape, candidates.shape)
+        return logits
+
     def _trainer(self, dataloader):
         pbar = tqdm(range(self.config['epochs']), desc='Epoch: ')
         train_loss = []
@@ -89,16 +90,31 @@ class RecRunner(RecModel):
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                sequences, artists, genders, countrys, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
+                sequences, artists, genders, countrys, artist_avg_months, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, artist_avg_months=artist_avg_months)
 
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys)
+                # if epoch == 3:
+                #     print(sequences[0])
+                #     print(labels[0])
+                #     print(logits[0])
+                #     print(torch.topk(input=logits[0], k=10, largest=True)[1])
+                #     1/0
+
+                # if batch_index == 0:
+                #     # print(logits[0])
+                #     # print(torch.topk(input=logits[0], k=10, largest=True)[1][0:2])
+                #     print(sequences[0])
+                #     print(labels[0])
 
                 # remove pad and unmasked labels and tokens
                 logits = logits[labels!=0]
                 labels = labels[labels!=0]
 
-                # print(torch.topk(input=logits[0], k=3, largest=True)[1])
-                # print(labels[0])
+                # logits = self._negative_sampling(logits, labels)
+
+                # # print(torch.topk(input=logits[0], k=3, largest=True)[1])
+                # print(logits)
+                # print(labels)
 
                 ce_loss = self.criterion(logits, labels)
                 loss = ce_loss.item()
@@ -107,16 +123,13 @@ class RecRunner(RecModel):
                 self.optimizer.step()
                 pbar.set_description("Loss: {}".format(round(loss, 3)), refresh=True)
 
-                # if batch_index % 100 == 0:
-                #     print()
-                #     print("Current loss: {}".format(ce_loss.item()))
-
                 if self.config['is_debug']:
                     if batch_index == 2:
                         break
             
             total_loss /= len(dataloader)
             train_loss.append(total_loss)
+
         return train_loss
 
     def train(self, train_df: pd.DataFrame, **kwargs):
@@ -149,9 +162,9 @@ class RecRunner(RecModel):
             users, predictions = [], []
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                user_id, sequences, artists, genders, countrys = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
+                user_id, sequences, artists, genders, countrys, artist_avg_months = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
 
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, artist_avg_months=artist_avg_months)
 
                 # the last token is the predicted one
                 logits = logits[:, -1]
@@ -165,7 +178,7 @@ class RecRunner(RecModel):
 
                 invert_top_suggestions = []
                 for suggestion in topk_suggestions:
-                    invert_top_suggestions.append(self.invert_track_list[suggestion])
+                    invert_top_suggestions.append(self.invert_track_list[suggestion-1])
 
                 users.append(user_id)
                 predictions.append(invert_top_suggestions)
