@@ -8,7 +8,7 @@ from .transformer_layers import EncoderLayer
 PAD = 0
 
 
-def get_pad_mask(seq, PAD):
+def get_pad_mask(seq):
     return (seq != PAD).unsqueeze(-2)
 
 
@@ -55,20 +55,19 @@ class TransformerEncoder(nn.Module):
         d_model = config['encode_dim']
         d_inner = config['encode_dim'] * 4
         dropout = config['dropout']
-        self.scale_emb = False
+        self.scale_emb = True
         self.d_model = d_model
 
         # + 1 for mask
-        self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'])
+        self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'], scale_grad_by_freq=True)
         # self.artist_embedding = nn.Embedding(config['artist_num']+1, config['encode_dim'])
         self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
         self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
-        # self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
+        self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
 
-        self.avg_month_embedding = nn.Sequential(
-            nn.Linear(1, config['encode_dim']),
-            nn.ReLU()
-        )
+        # self.novelty_artist_embedding = nn.Sequential(
+        #     nn.Linear(config['user_numerical_num'], config['encode_dim'])
+        # )
 
         self.dropout = nn.Dropout(p=dropout)
 
@@ -79,24 +78,27 @@ class TransformerEncoder(nn.Module):
 
         self.classifier = nn.Linear(config['encode_dim'], config['track_num'])
 
-        # two layer achieved better hit-rate but worse in overall score
+        # # two layer achieved better hit-rate but worse in overall score
         # self.classifier = nn.Sequential(
         #     nn.Linear(config['encode_dim'], config['encode_dim']*2),
         #     nn.GELU(),
-        #     nn.Linear(config['encode_dim']*2, config['track_num']+2)
+        #     nn.Linear(config['encode_dim']*2, config['track_num'])
         # )
         
 
-    def forward(self, sequences, artists, genders, countrys, artist_avg_months, src_mask=None, return_attns=False):
+    def forward(self, sequences, artists, genders, countrys, novelty_artists, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
+
+        # mask = get_pad_mask(sequences) & get_subsequent_mask(sequences)
 
         embedded_tracks = self.track_embedding(sequences)
         # embedded_artists = self.artist_embedding(artists)
         embedded_genders = self.gender_embedding(genders)
         embedded_countrys = self.country_embedding(countrys)
 
-        # add this will become nan loss
-        embedded_artist_avg_months = self.avg_month_embedding(artist_avg_months.unsqueeze(-1))
+        # # add this will become nan loss
+        # novelty_artists = torch.cat([novelty_artists[0].unsqueeze(-1), novelty_artists[1].unsqueeze(-1), novelty_artists[2].unsqueeze(-1)], dim=-1).to(sequences.device)
+        # embedded_novelty_artists = self.novelty_artist_embedding(novelty_artists)
 
         embeddings = embedded_tracks + embedded_genders + embedded_countrys
 
