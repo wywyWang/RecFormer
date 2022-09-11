@@ -21,6 +21,7 @@ class RecRunner(RecModel):
 
         self.top_k = top_k
         self.config = config
+        config['user_numerical_num'] = 3
 
         self.user_info = self._convert_user_info(user_info)
 
@@ -48,7 +49,6 @@ class RecRunner(RecModel):
         self.track_list, self.invert_track_list = pd.factorize(df['track_id'])
         df['converted_track_id'] = self.track_list + 1              # reserve 0 for pad
         self.config['track_num'] = len(self.invert_track_list) + 1
-        print(df['converted_track_id'].max())
         print("Track num: {}".format(self.config['track_num']))
 
         self.artist_list, uniques_artist_list = pd.factorize(df['artist_id'])
@@ -90,8 +90,8 @@ class RecRunner(RecModel):
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                sequences, artists, genders, countrys, artist_avg_months, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, artist_avg_months=artist_avg_months)
+                sequences, artists, genders, countrys, novelty_artists, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4:7], data[7].to(self.device)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, novelty_artists=novelty_artists)
 
                 # if epoch == 3:
                 #     print(sequences[0])
@@ -117,10 +117,10 @@ class RecRunner(RecModel):
                 # print(labels)
 
                 ce_loss = self.criterion(logits, labels)
-                loss = ce_loss.item()
-                total_loss += loss
                 ce_loss.backward()
                 self.optimizer.step()
+                loss = ce_loss.item()
+                total_loss += loss
                 pbar.set_description("Loss: {}".format(round(loss, 3)), refresh=True)
 
                 if self.config['is_debug']:
@@ -137,8 +137,12 @@ class RecRunner(RecModel):
         train_dataloader = self._prepare_train_data(train_df)
 
         self.recformer = TransformerEncoder(self.config).to(self.device)
-        self.optimizer = torch.optim.Adam(self.recformer.parameters(), lr=self.config['learning_rate'], weight_decay=1e-2)
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.3)
+        self.optimizer = torch.optim.AdamW(self.recformer.parameters(), lr=self.config['learning_rate'])
+        self.criterion = nn.CrossEntropyLoss(label_smoothing=self.config['label_smoothing'])
+
+        print("Total parameters:")
+        print(sum(p.numel() for p in self.recformer.parameters() if p.requires_grad))
+        print(self.config)
 
         print("==== Start Training ====")
         train_loss = self._trainer(train_dataloader)
@@ -162,9 +166,9 @@ class RecRunner(RecModel):
             users, predictions = [], []
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                user_id, sequences, artists, genders, countrys, artist_avg_months = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
+                user_id, sequences, artists, genders, countrys, novelty_artists = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5:8]
 
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, artist_avg_months=artist_avg_months)
+                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, novelty_artists=novelty_artists)
 
                 # the last token is the predicted one
                 logits = logits[:, -1]
