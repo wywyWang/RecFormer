@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import random
 import torch
 import torch.nn as nn
-import datatable as dt
+import os
 
 
 class RecRunner(RecModel):
@@ -51,10 +51,13 @@ class RecRunner(RecModel):
         self.config['track_num'] = len(self.invert_track_list) + 1
         print("Track num: {}".format(self.config['track_num']))
 
-        self.artist_list, uniques_artist_list = pd.factorize(df['artist_id'])
-        df['converted_artist_id'] = self.artist_list + 1              # reserve 0 for pad
-        self.config['artist_num'] = len(uniques_artist_list) + 1
-        print("Artist num: {}".format(self.config['artist_num']))
+        # self.artist_list, uniques_artist_list = pd.factorize(df['artist_id'])
+        # df['converted_artist_id'] = self.artist_list + 1              # reserve 0 for pad
+        # self.config['artist_num'] = len(uniques_artist_list) + 1
+        # print("Artist num: {}".format(self.config['artist_num']))
+
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+        df["hour"] = df["timestamp"].dt.hour
 
         return df
 
@@ -65,7 +68,7 @@ class RecRunner(RecModel):
 
         # build dataloader
         data = RecDataset(df=self.df, user_info=self.user_info, mode='train', config=self.config)
-        dataloader = DataLoader(data, batch_size=self.config['batch'])
+        dataloader = DataLoader(data, batch_size=self.config['batch'], num_workers=4, pin_memory=False)
         return dataloader
 
     def _negative_sampling(self, logits, labels):
@@ -90,31 +93,14 @@ class RecRunner(RecModel):
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                sequences, artists, genders, countrys, novelty_artists, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4:7], data[7].to(self.device)
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, novelty_artists=novelty_artists)
-
-                # if epoch == 3:
-                #     print(sequences[0])
-                #     print(labels[0])
-                #     print(logits[0])
-                #     print(torch.topk(input=logits[0], k=10, largest=True)[1])
-                #     1/0
-
-                # if batch_index == 0:
-                #     # print(logits[0])
-                #     # print(torch.topk(input=logits[0], k=10, largest=True)[1][0:2])
-                #     print(sequences[0])
-                #     print(labels[0])
+                sequences, genders, countrys, hours, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
+                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours)
 
                 # remove pad and unmasked labels and tokens
                 logits = logits[labels!=0]
                 labels = labels[labels!=0]
 
                 # logits = self._negative_sampling(logits, labels)
-
-                # # print(torch.topk(input=logits[0], k=3, largest=True)[1])
-                # print(logits)
-                # print(labels)
 
                 ce_loss = self.criterion(logits, labels)
                 ce_loss.backward()
@@ -126,6 +112,8 @@ class RecRunner(RecModel):
                 if self.config['is_debug']:
                     if batch_index == 2:
                         break
+
+                del loss, logits, sequences, genders, countrys, labels
             
             total_loss /= len(dataloader)
             train_loss.append(total_loss)
@@ -150,14 +138,14 @@ class RecRunner(RecModel):
         print(train_loss)
 
         if self.config['is_save']:
-            if not os.path.exists(config['save_path']):
-                os.makedirs(config['save_path'])
-            torch.save(self.recformer.state_dict(), '{}{}.pt'.format(config['save_path'], 'model'))
+            if not os.path.exists(self.config['save_path']):
+                os.makedirs(self.config['save_path'])
+            torch.save(self.recformer.state_dict(), '{}{}.pt'.format(self.config['save_path'], 'model'))
 
     def _prepare_test_data(self, test_df):
         data = RecDataset(df=self.df, user_info=self.user_info, mode='test', config=self.config, test_df=test_df)
         # [TODO]: can batchify now, but has error in below codes
-        dataloader = DataLoader(data, batch_size=1)
+        dataloader = DataLoader(data, batch_size=1, num_workers=4)
         return dataloader
 
     def _predictor(self, dataloader):
@@ -166,9 +154,9 @@ class RecRunner(RecModel):
             users, predictions = [], []
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                user_id, sequences, artists, genders, countrys, novelty_artists = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5:8]
+                user_id, sequences, genders, countrys, hours = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
 
-                logits = self.recformer(sequences=sequences, artists=artists, genders=genders, countrys=countrys, novelty_artists=novelty_artists)
+                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours)
 
                 # the last token is the predicted one
                 logits = logits[:, -1]

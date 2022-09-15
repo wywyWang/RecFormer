@@ -50,8 +50,8 @@ class TransformerEncoder(nn.Module):
         self.n_layers = config['n_layers']
 
         n_heads = config['n_heads']
-        d_k = config['encode_dim']
-        d_v = config['encode_dim']
+        d_k = config['encode_dim'] // 2
+        d_v = config['encode_dim'] // 2
         d_model = config['encode_dim']
         d_inner = config['encode_dim'] * 4
         dropout = config['dropout']
@@ -60,7 +60,6 @@ class TransformerEncoder(nn.Module):
 
         # + 1 for mask
         self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'], scale_grad_by_freq=True)
-        # self.artist_embedding = nn.Embedding(config['artist_num']+1, config['encode_dim'])
         self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
         self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
         self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
@@ -86,13 +85,12 @@ class TransformerEncoder(nn.Module):
         # )
         
 
-    def forward(self, sequences, artists, genders, countrys, novelty_artists, src_mask=None, return_attns=False):
+    def forward(self, sequences, genders, countrys, hours, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
 
         # mask = get_pad_mask(sequences) & get_subsequent_mask(sequences)
 
         embedded_tracks = self.track_embedding(sequences)
-        # embedded_artists = self.artist_embedding(artists)
         embedded_genders = self.gender_embedding(genders)
         embedded_countrys = self.country_embedding(countrys)
 
@@ -110,7 +108,8 @@ class TransformerEncoder(nn.Module):
         encode_output = self.layer_norm(encode_output)
 
         for enc_layer in self.layer_stack:
-            encode_output, enc_slf_attn = enc_layer(encode_output)
+            encode_output, enc_slf_attn = enc_layer(encode_output, hours=hours)
+            # encode_output, enc_slf_attn = enc_layer(encode_output, slf_attn_mask=mask)
 
         logits = self.classifier(encode_output)
 
