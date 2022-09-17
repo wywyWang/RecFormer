@@ -66,6 +66,20 @@ class RecRunner(RecModel):
         # total: 820998 unique tracks
         self.df = self._convert_track_info(df)
 
+        # prepare track bin
+        bins = np.array([1, 10, 100, 1000])
+        track_activity = df.groupby('converted_track_id', as_index=True, sort=False)[['user_track_count']].sum()
+        track_activity['bin_index'] = np.digitize(track_activity.values.reshape(-1), bins)
+        track_activity['bins'] = bins[track_activity['bin_index'].values - 1]
+        # track_activity = track_activity[['track_id', 'bin_index']]
+
+        self.track_bins = {}
+        for key, value in track_activity['bin_index'].to_dict().items():
+            if value not in self.track_bins.keys():
+                self.track_bins[value] = [key]
+            else:
+                self.track_bins[value].append(key)
+
         # build dataloader
         data = RecDataset(df=self.df, user_info=self.user_info, mode='train', config=self.config)
         dataloader = DataLoader(data, batch_size=self.config['batch'], num_workers=4, pin_memory=False)
@@ -161,16 +175,37 @@ class RecRunner(RecModel):
                 # the last token is the predicted one
                 logits = logits[:, -1]
 
+                # # select indexes of each bin and select top k
+                # invert_top_suggestions = None
+                # for key, values in self.track_bins.items():
+                #     topk_suggestions = torch.topk(input=logits[:, values], k=25, largest=True)[1] - 1      # 25 = 100 / 4bins
+                #     if invert_top_suggestions is None:
+                #         invert_top_suggestions = self.invert_track_list[topk_suggestions.cpu().detach().flatten().tolist()].values.tolist()
+                #     else:
+                #         invert_top_suggestions += self.invert_track_list[topk_suggestions.cpu().detach().flatten().tolist()].values.tolist()
+
+                # # top k selection
+                # indices_to_remove = logits < torch.topk(logits, self.top_k*2)[0][..., -1, None]
+                # logits[indices_to_remove] = float("-inf")
+                # p = torch.nn.functional.softmax(logits, dim=-1)
+                # topk_suggestions = p.multinomial(num_samples=self.top_k, replacement=False).cpu().detach().flatten().tolist()
+
+                # HR better but overall worse
                 # # remove past tracks as -1e3
-                # # decrease performance
                 # past_tracks = self.df.loc[self.df['user_id']==user_id[0], 'converted_track_id'].values.tolist()
                 # logits[:, past_tracks] = -1e3
 
-                topk_suggestions = torch.topk(input=logits, k=self.top_k, largest=True)[1].cpu().detach().flatten().tolist()
+                topk_suggestions = (torch.topk(input=logits, k=self.top_k, largest=True)[1]-1).cpu().detach().flatten().tolist()
+                invert_top_suggestions = self.invert_track_list[topk_suggestions].values.tolist()
 
-                invert_top_suggestions = []
-                for suggestion in topk_suggestions:
-                    invert_top_suggestions.append(self.invert_track_list[suggestion-1])
+                # minor_class = self.track_bins[1]
+                # topk_suggestions = torch.topk(input=logits[:, minor_class], k=10, largest=True)[1] - 1
+                # minor_top_suggestions = self.invert_track_list[topk_suggestions.cpu().detach().flatten().tolist()].values.tolist()
+                # invert_top_suggestions[:10] = minor_top_suggestions
+
+                # invert_top_suggestions = []
+                # for suggestion in topk_suggestions:
+                #     invert_top_suggestions.append(self.invert_track_list[suggestion-1])
 
                 users.append(user_id)
                 predictions.append(invert_top_suggestions)
