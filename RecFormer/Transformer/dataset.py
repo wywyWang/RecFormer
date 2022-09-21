@@ -21,12 +21,12 @@ class RecDataset(Dataset):
         if mode == 'train':
             # idx starts from 1
             for idx, row in user_tracks.iterrows():
-                self.users[idx] = (row['converted_track_id'], row['converted_gender'], row['converted_country'], row['hour'], row['most_hour'])
+                self.users[idx] = (row['converted_track_id'], row['converted_gender'], row['converted_country'], row['hour'], row['most_hour'], row['age_bin'])
                 self.user_ids.append(idx)
         elif mode == 'test':
             # idx starts from 1
             for idx, row in user_tracks.loc[test_df].iterrows():
-                self.users[idx] = (row['converted_track_id'], row['converted_gender'], row['converted_country'], row['hour'], row['most_hour'])
+                self.users[idx] = (row['converted_track_id'], row['converted_gender'], row['converted_country'], row['hour'], row['most_hour'], row['age_bin'])
                 self.user_ids.append(idx)
         else:
             raise NotImplementedError()
@@ -36,10 +36,10 @@ class RecDataset(Dataset):
     
     def __getitem__(self, idx):
         user_id = self.user_ids[idx]
-        user_histroy, user_gender, user_country, user_hour, user_most_hour = self.users[user_id]
+        user_histroy, user_gender, user_country, user_hour, user_most_hour, user_age = self.users[user_id]
 
         if self.mode == 'train':
-            tokens, genders, countrys, hours, labels = [], [], [], [], []
+            tokens, genders, countrys, hours, ages, labels = [], [], [], [], [], []
             for idx, history in enumerate(user_histroy):
                 prob = random.random()
 
@@ -63,11 +63,13 @@ class RecDataset(Dataset):
                     labels.append(0)
                 genders.append(user_gender)
                 countrys.append(user_country)
+                ages.append(user_age)
                 hours.append(user_hour[idx])
 
             tokens = tokens[-self.max_len:]
             genders = genders[-self.max_len:]
             countrys = countrys[-self.max_len:]
+            ages = ages[-self.max_len:]
             hours = hours[-self.max_len:]
             labels = labels[-self.max_len:]
 
@@ -76,16 +78,18 @@ class RecDataset(Dataset):
             tokens = [0] * mask_len + tokens
             genders = [0] * mask_len + genders
             countrys = [0] * mask_len + countrys
+            ages = [0] * mask_len + ages
             hours = [0] * mask_len + hours
             labels = [0] * mask_len + labels
 
-            return torch.LongTensor(tokens), torch.LongTensor(genders), torch.LongTensor(countrys), torch.LongTensor(hours), torch.LongTensor(labels)
+            return torch.LongTensor(tokens), torch.LongTensor(genders), torch.LongTensor(countrys), torch.LongTensor(hours), torch.LongTensor(ages), torch.LongTensor(labels)
         elif self.mode == 'test':
             user_histroy += [self.mask_token]
             tokens = user_histroy[-self.max_len:]
 
             genders = [user_gender] * len(tokens)
             countrys = [user_country] * len(tokens)
+            ages = [user_age] * len(tokens)
 
             # assume the user listen in the hour he/her often listen
             user_hour += [user_most_hour]
@@ -95,8 +99,9 @@ class RecDataset(Dataset):
             tokens = [0] * mask_len + tokens
             genders = [0] * mask_len + genders
             countrys = [0] * mask_len + countrys
+            ages = [0] * mask_len + ages
             hours = [0] * mask_len + hours
 
-            return user_id, torch.LongTensor(tokens), torch.LongTensor(genders), torch.LongTensor(countrys), torch.LongTensor(hours)
+            return user_id, torch.LongTensor(tokens), torch.LongTensor(genders), torch.LongTensor(countrys), torch.LongTensor(hours), torch.LongTensor(ages)
         else:
             raise NotImplementedError

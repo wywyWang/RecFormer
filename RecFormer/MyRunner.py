@@ -42,6 +42,12 @@ class RecRunner(RecModel):
         self.config['gender_num'] = len(uniques_genders) + 1
         self.config['country_num'] = len(uniques_country) + 1
 
+        # discretize age
+        bins = [-1, 0, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 200]
+        bin_labels = [_+1 for _ in range(len(bins)-1)]
+        user_info['age_bin'] = pd.cut(user_info['age'], bins, labels=bin_labels, include_lowest=True)
+        self.config['age_num'] = len(bin_labels) + 1
+
         return user_info
 
     def _convert_track_info(self, df: pd.DataFrame):
@@ -86,13 +92,12 @@ class RecRunner(RecModel):
         return dataloader
 
     def _negative_sampling(self, logits, labels):
-        sampling_logits = None
         class_num = logits.shape[1]
         candidates = torch.randint(low=0, high=logits.shape[1], size=(class_num-self.config['negative_samples'],))
         
         for mini_batch in range(len(labels)):
             label_logits = logits[mini_batch, labels[mini_batch]]
-            logits[mini_batch, candidates] = -1e6
+            logits[mini_batch, candidates] = float("-inf")
             logits[mini_batch, labels[mini_batch]] = label_logits
 
         # user x class_num, user
@@ -107,8 +112,8 @@ class RecRunner(RecModel):
             total_loss = 0
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                sequences, genders, countrys, hours, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
-                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours)
+                sequences, genders, countrys, hours, ages, labels = data[0].to(self.device), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
+                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours, ages=ages)
 
                 # remove pad and unmasked labels and tokens
                 logits = logits[labels!=0]
@@ -168,9 +173,9 @@ class RecRunner(RecModel):
             users, predictions = [], []
             for batch_index, data in tqdm(enumerate(dataloader), total=len(dataloader)):
                 self.optimizer.zero_grad()
-                user_id, sequences, genders, countrys, hours = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device)
+                user_id, sequences, genders, countrys, hours, ages = data[0].tolist(), data[1].to(self.device), data[2].to(self.device), data[3].to(self.device), data[4].to(self.device), data[5].to(self.device)
 
-                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours)
+                logits = self.recformer(sequences=sequences, genders=genders, countrys=countrys, hours=hours, ages=ages)
 
                 # the last token is the predicted one
                 logits = logits[:, -1]

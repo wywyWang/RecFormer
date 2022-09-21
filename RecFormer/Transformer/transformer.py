@@ -62,11 +62,12 @@ class TransformerEncoder(nn.Module):
         self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'], scale_grad_by_freq=True)
         self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
         self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
+        self.age_embedding = nn.Embedding(config['age_num'], config['encode_dim'])
         self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
 
-        # self.novelty_artist_embedding = nn.Sequential(
-        #     nn.Linear(config['user_numerical_num'], config['encode_dim'])
-        # )
+        self.novelty_artist_embedding = nn.Sequential(
+            nn.Linear(config['user_numerical_num'], config['encode_dim'])
+        )
 
         self.dropout = nn.Dropout(p=dropout)
 
@@ -80,12 +81,12 @@ class TransformerEncoder(nn.Module):
         # # two layer achieved better hit-rate but worse in overall score
         # self.classifier = nn.Sequential(
         #     nn.Linear(config['encode_dim'], config['encode_dim']*2),
-        #     nn.GELU(),
+        #     nn.ReLU(),
         #     nn.Linear(config['encode_dim']*2, config['track_num'])
         # )
         
 
-    def forward(self, sequences, genders, countrys, hours, src_mask=None, return_attns=False):
+    def forward(self, sequences, genders, countrys, hours, ages, src_mask=None, return_attns=False):
         enc_slf_attn_list = []
 
         # mask = get_pad_mask(sequences) & get_subsequent_mask(sequences)
@@ -93,12 +94,13 @@ class TransformerEncoder(nn.Module):
         embedded_tracks = self.track_embedding(sequences)
         embedded_genders = self.gender_embedding(genders)
         embedded_countrys = self.country_embedding(countrys)
+        embedded_ages = self.age_embedding(ages)
 
         # # add this will become nan loss
         # novelty_artists = torch.cat([novelty_artists[0].unsqueeze(-1), novelty_artists[1].unsqueeze(-1), novelty_artists[2].unsqueeze(-1)], dim=-1).to(sequences.device)
         # embedded_novelty_artists = self.novelty_artist_embedding(novelty_artists)
 
-        embeddings = embedded_tracks + embedded_genders + embedded_countrys
+        embeddings = embedded_tracks + embedded_genders + embedded_countrys + embedded_ages
 
         # Forward
         if self.scale_emb:
