@@ -196,7 +196,7 @@ class RecRunner(RecModel):
                 # topk_suggestions = p.multinomial(num_samples=self.top_k, replacement=False).cpu().detach().flatten().tolist()
 
                 # HR better but overall worse
-                # # remove past tracks as -1e3
+                # remove past tracks as -1e3
                 # past_tracks = self.df.loc[self.df['user_id']==user_id[0], 'converted_track_id'].values.tolist()
                 # logits[:, past_tracks] = -1e3
 

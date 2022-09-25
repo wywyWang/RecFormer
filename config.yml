@@ -2,13 +2,13 @@ model_args:
     n_layers: 1
     n_heads: 1              # 1 is the same as 2
     encode_dim: 64
-    dropout: 0.1
+    dropout: 0.0
     seed: 42
-    batch: 40
-    learning_rate: 0.0005
+    batch: 100
+    learning_rate: 0.001
     epochs: 50              # 50 is good
-    mlm_prob: 0.3           # 0.5 converge fast
-    max_len: 50             # 100 will be better
+    mlm_prob: 0.4           
+    max_len: 60             # 100 will be better
     is_save: 0
     is_debug: 0
     gpu_index: 1
@@ -16,8 +16,3 @@ model_args:
     label_smoothing: 0.0
     save_path: model/
 
-    # no mask is better HR than mask, but worst overall score
-    # small emb dim and layer converge slower
-    # Goal: 20min per fold and HR > 0.015
-    # top: 
-    # bot: 
