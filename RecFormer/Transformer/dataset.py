@@ -54,7 +54,6 @@ class RecDataset(Dataset):
                 #     novelty_artist_avg_years.append(novelty_artist_avg_year)
                 #     continue
 
-                # [TODO]: set prob that will replace with other items
                 if prob < self.mlm_prob:
                     tokens.append(self.mask_token)
                     labels.append(history)
@@ -84,6 +83,7 @@ class RecDataset(Dataset):
 
             return torch.LongTensor(tokens), torch.LongTensor(genders), torch.LongTensor(countrys), torch.LongTensor(hours), torch.LongTensor(ages), torch.LongTensor(labels)
         elif self.mode == 'test':
+            # put at the last timestamp
             user_histroy += [self.mask_token]
             tokens = user_histroy[-self.max_len:]
 

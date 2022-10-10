@@ -60,9 +60,9 @@ class TransformerEncoder(nn.Module):
 
         # + 1 for mask
         self.track_embedding = nn.Embedding(config['track_num']+1, config['encode_dim'], scale_grad_by_freq=True)
-        self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'])
-        self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'])
-        self.age_embedding = nn.Embedding(config['age_num'], config['encode_dim'])
+        self.gender_embedding = nn.Embedding(config['gender_num'], config['encode_dim'], scale_grad_by_freq=True)
+        self.country_embedding = nn.Embedding(config['country_num'], config['encode_dim'], scale_grad_by_freq=True)
+        self.age_embedding = nn.Embedding(config['age_num'], config['encode_dim'], scale_grad_by_freq=True)
         self.position_embedding = PositionalEncoding(config['encode_dim'], n_position=config['max_len'])
 
         self.novelty_artist_embedding = nn.Sequential(

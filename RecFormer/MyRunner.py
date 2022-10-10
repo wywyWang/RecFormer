@@ -32,6 +32,8 @@ class RecRunner(RecModel):
     def _convert_user_info(self, user_info):
         user_info['gender'] = user_info['gender'].fillna(value='n')
         user_info['country'] = user_info['country'].fillna(value='UNKNOWN')
+        # user_info['gender'] = user_info['gender'].dropna()
+        # user_info['country'] = user_info['country'].dropna()
 
         codes_genders, uniques_genders = pd.factorize(user_info['gender'])
         user_info['converted_gender'] = codes_genders + 1              # reserve 0 for pad
@@ -68,23 +70,21 @@ class RecRunner(RecModel):
         return df
 
     def _prepare_train_data(self, df):
-        # convert track id to feed into embedding layer
-        # total: 820998 unique tracks
         self.df = self._convert_track_info(df)
 
-        # prepare track bin
-        bins = np.array([1, 10, 100, 1000])
-        track_activity = df.groupby('converted_track_id', as_index=True, sort=False)[['user_track_count']].sum()
-        track_activity['bin_index'] = np.digitize(track_activity.values.reshape(-1), bins)
-        track_activity['bins'] = bins[track_activity['bin_index'].values - 1]
+        # # prepare track bin
+        # bins = np.array([1, 10, 100, 1000])
+        # track_activity = df.groupby('converted_track_id', as_index=True, sort=False)[['user_track_count']].sum()
+        # track_activity['bin_index'] = np.digitize(track_activity.values.reshape(-1), bins)
+        # track_activity['bins'] = bins[track_activity['bin_index'].values - 1]
         # track_activity = track_activity[['track_id', 'bin_index']]
 
-        self.track_bins = {}
-        for key, value in track_activity['bin_index'].to_dict().items():
-            if value not in self.track_bins.keys():
-                self.track_bins[value] = [key]
-            else:
-                self.track_bins[value].append(key)
+        # self.track_bins = {}
+        # for key, value in track_activity['bin_index'].to_dict().items():
+        #     if value not in self.track_bins.keys():
+        #         self.track_bins[value] = [key]
+        #     else:
+        #         self.track_bins[value].append(key)
 
         # build dataloader
         data = RecDataset(df=self.df, user_info=self.user_info, mode='train', config=self.config)
@@ -100,8 +100,6 @@ class RecRunner(RecModel):
             logits[mini_batch, candidates] = float("-inf")
             logits[mini_batch, labels[mini_batch]] = label_logits
 
-        # user x class_num, user
-        # print(logits.shape, labels.shape, candidates.shape)
         return logits
 
     def _trainer(self, dataloader):
