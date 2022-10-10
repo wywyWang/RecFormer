@@ -55,35 +55,33 @@ if __name__ == '__main__':
     print('\n\n==== Starting evaluation script at: {} ====\n'.format(datetime.utcnow()))
     # load the dataset
     print('\n\n==== Loading dataset at: {} ====\n'.format(datetime.utcnow()))
-    # this will load the dataset with the default values for the challenge
-    dataset = ChallengeDataset(num_folds=1, seed=42)
-    print('\n\n==== Init runner at: {} ====\n'.format(datetime.utcnow()))
-    # run the evaluation loop
-    runner = EvalRSRunner(
-        dataset=dataset,
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        participant_id=PARTICIPANT_ID,
-        bucket_name=BUCKET_NAME,
-        email=EMAIL
+
+    for seed in range(config['model_args']['seed'], config['model_args']['seed']+1):
+        # this will load the dataset with the default values for the challenge
+        dataset = ChallengeDataset(seed=seed)
+        config['model_args']['seed'] = seed
+        # dataset = ChallengeDataset(num_folds=1, seed=42)
+        print('\n\n==== Init runner at: {} ====\n'.format(datetime.utcnow()))
+        # run the evaluation loop
+        runner = EvalRSRunner(
+            dataset=dataset,
+            aws_access_key_id=AWS_ACCESS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            participant_id=PARTICIPANT_ID,
+            bucket_name=BUCKET_NAME,
+            email=EMAIL
+            )
+        print('==== Runner loaded, starting loop at: {} ====\n'.format(datetime.utcnow()))
+        my_model = RecRunner(
+            tracks_info=dataset.df_tracks,
+            user_info=dataset.df_users,
+            config=config['model_args']
         )
-    print('==== Runner loaded, starting loop at: {} ====\n'.format(datetime.utcnow()))
-    # NOTE: this evaluation will run with default values for the parameters and the upload flag
-    # For local testing and iteration, you can check the tutorial in the notebooks folder and the
-    # kaggle notebook: https://www.kaggle.com/code/vinidd/cikm-data-challenge
-    my_model = RecRunner(
-        tracks_info=dataset.df_tracks,
-        user_info=dataset.df_users,
-        # kwargs may contain additional arguments in case, for example, you 
-        # have data augmentation functions that you wish to use in combination
-        # with the dataset provided by the runner.
-        config=config['model_args']
-    )
-    # run evaluation with your model
-    # the evaluation loop will magically perform the fold splitting, training / testing
-    # and then submit the results to the leaderboard
-    runner.evaluate(
-        model=my_model,
-        upload=False
-    )
-    print('\n\n==== Evaluation ended at: {} ===='.format(datetime.utcnow()))
+        # run evaluation with your model
+        # the evaluation loop will magically perform the fold splitting, training / testing
+        # and then submit the results to the leaderboard
+        runner.evaluate(
+            model=my_model,
+            upload=True
+        )
+        print('\n\n==== Evaluation ended at: {} ===='.format(datetime.utcnow()))
