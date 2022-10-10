@@ -26,7 +26,7 @@ Moreover, we introduce linearized attention to reduce quadratic computation and 
     ```=script
     cp submission.py evalRS-CIKM-2022/submission.py
     ```
-    - Note: The only change is in [here](https://github.com/wywyWang/RecFormer/blob/main/EvalRSRecList.py#:~:text=%40rec_test(%27MRED_MOST_DOH%27)), so you can copy this function directly as well.
+    - Note: The only change is in [mred_most_date_of_hour](https://github.com/wywyWang/RecFormer/blob/main/EvalRSRecList.py#:~:text=%40rec_test(%27MRED_MOST_DOH%27)), so you can copy this function directly as well.
 - Place your `upload.env` in the root folder.
 
 ## Usage
