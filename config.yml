@@ -11,7 +11,7 @@ model_args:
     max_len: 60             # 100 will be better
     is_save: 0
     is_debug: 0
-    gpu_index: 1
+    gpu_index: 0
     negative_samples: 0
     label_smoothing: 0.0
     save_path: model/
