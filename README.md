@@ -1,7 +1,7 @@
 # RecFormer: Personalized Temporal-Aware Transformer for Fair Music Recommendation
 Official code of the paper RecFormer: Personalized Temporal-Aware Transformer for Fair Music Recommendation (evalRS @ CIKM 2022). 
 We won the seventh prize in this challenge.
-Paper will be released soon.
+Paper can be referred in [here](https://ceur-ws.org/Vol-3318/short9.pdf).
 
 ## Overview
 The shared task, a Rounded Evaluation of Recommender Systems ([EvalRS @ CIKM 2022](https://github.com/RecList/evalRS-CIKM-2022)), is introduced to broadly measure multifaceted model predictions for music recommendation.
